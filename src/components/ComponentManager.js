@@ -1040,7 +1040,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     window.addEventListener("download-current", handler);
     return () => window.removeEventListener("download-current", handler);
-  }, []);
+  }, [generateCode]);
 
   return (
     <div className="panel">

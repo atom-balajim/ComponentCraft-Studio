@@ -1,42 +1,54 @@
-import { useMemo, useState } from 'react';
-import { nanoid } from 'nanoid';
+import { useMemo, useState } from "react";
+import { nanoid } from "nanoid";
 
-const CONTAINER_TYPES = new Set(['Form', 'Card']);
+const CONTAINER_TYPES = new Set(["Form", "Card"]);
 
 export function useDesignerState() {
   const [tree, setTree] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
 
   const selectedNode = useMemo(() => {
+    // We use a memoized value here so it doesn't re-calculate unless the tree or selectedId changes.
     return findNode(tree, selectedId)?.node ?? null;
   }, [tree, selectedId]);
 
   function addNode(type, targetId = null) {
     const node = createNode(type);
-    setTree(prev => {
+    setTree((prev) => {
+      // If there's no target, add the node to the root of the tree
       if (!targetId) return [...prev, node];
-      const { node: target } = findNode(prev, targetId) || {};
-      if (!target || !CONTAINER_TYPES.has(target.type)) return [...prev, node];
-      const next = clone(prev);
-      const { node: targetNext } = findNode(next, targetId);
-      targetNext.children.push(node);
-      return next;
+
+      // Find the target node in the tree
+      const targetResult = findNode(prev, targetId);
+      const target = targetResult?.node;
+
+      // If target exists and is a container, add the new node as a child
+      if (target && CONTAINER_TYPES.has(target.type)) {
+        const next = clone(prev);
+        const { node: targetNext } = findNode(next, targetId);
+        targetNext.children.push(node);
+        return next;
+      }
+
+      // If the target is not a container, just add the new node to the root.
+      return [...prev, node];
     });
     setSelectedId(node.id);
   }
 
   function removeNode(id) {
-    setTree(prev => removeNodeFromTree(prev, id));
+    setTree((prev) => removeNodeFromTree(prev, id));
     if (selectedId === id) setSelectedId(null);
   }
 
   function updateNode(id, updater) {
-    setTree(prev => {
+    setTree((prev) => {
       const next = clone(prev);
       const result = findNode(next, id);
       if (!result) return prev;
       const { node } = result;
-      const updated = typeof updater === 'function' ? updater(node) : { ...node, ...updater };
+      const updated =
+        typeof updater === "function" ? updater(node) : { ...node, ...updater };
       Object.assign(node, updated);
       return next;
     });
@@ -45,11 +57,11 @@ export function useDesignerState() {
   const suggestions = useMemo(() => computeSuggestions(tree), [tree]);
 
   const updateNodePosition = (id, x, y) => {
-    setTree(prev => prev.map(node => 
-      node.id === id 
-        ? { ...node, position: { x, y } }
-        : node
-    ));
+    setTree((prev) =>
+      prev.map((node) =>
+        node.id === id ? { ...node, position: { x, y } } : node
+      )
+    );
   };
 
   const loadComponent = (componentData) => {
@@ -74,7 +86,7 @@ export function useDesignerState() {
     suggestions,
     CONTAINER_TYPES,
     reorderRoot: (oldIndex, newIndex) => {
-      setTree(prev => {
+      setTree((prev) => {
         if (oldIndex === newIndex) return prev;
         const next = [...prev];
         const [moved] = next.splice(oldIndex, 1);
@@ -83,7 +95,7 @@ export function useDesignerState() {
       });
     },
     reorderWithin: (parentId, oldIndex, newIndex) => {
-      setTree(prev => {
+      setTree((prev) => {
         if (oldIndex === newIndex) return prev;
         if (!parentId) {
           const next = [...prev];
@@ -101,13 +113,25 @@ export function useDesignerState() {
       });
     },
     moveBetween: (sourceParentId, sourceIndex, targetParentId, targetIndex) => {
-      setTree(prev => {
+      setTree((prev) => {
         const next = clone(prev);
-        const sourceList = sourceParentId ? (findNode(next, sourceParentId)?.node?.children || []) : next;
-        const targetList = targetParentId ? (findNode(next, targetParentId)?.node?.children || []) : next;
+        // Get the source list (root or children of a container)
+        const sourceList = sourceParentId
+          ? findNode(next, sourceParentId)?.node?.children || []
+          : next;
+        // Get the target list (root or children of a container)
+        const targetList = targetParentId
+          ? findNode(next, targetParentId)?.node?.children || []
+          : next;
+
+        // If either list is invalid, return the previous state
         if (!sourceList.length || !targetList) return prev;
+
+        // Remove the moved node from the source list
         const [moved] = sourceList.splice(sourceIndex, 1);
-        const insertAt = typeof targetIndex === 'number' ? targetIndex : targetList.length;
+        // Insert the node into the target list
+        const insertAt =
+          typeof targetIndex === "number" ? targetIndex : targetList.length;
         targetList.splice(insertAt, 0, moved);
         return next;
       });
@@ -116,62 +140,113 @@ export function useDesignerState() {
     loadComponent,
     resetCanvas,
     getChildIds: (parentId) => {
-      if (!parentId) return tree.map(n => n.id);
+      if (!parentId) return tree.map((n) => n.id);
       const res = findNode(tree, parentId);
       const list = res?.node?.children || [];
-      return list.map(n => n.id);
+      return list.map((n) => n.id);
     },
     locate: (id) => {
       const res = findNode(tree, id);
       if (!res) return null;
-      const parentId = res.parent ? res.parent.list[res.parent.index]?.id ?? null : null;
-      // The above is not correct: parent.list[parent.index] is the node itself; we want parent container id. We compute by searching one level above via indexPath.
-      const index = res.parent?.index ?? tree.findIndex(n => n.id === id);
-      let containerId = null;
-      if (res.indexPath && res.indexPath.length > 1) {
-        // indexPath points to indexes from root to this node; the container is the node at indexPath without last index
-        const path = res.indexPath.slice(0, -1);
+
+      const { indexPath } = res;
+      let parentId = null;
+      let index = indexPath[indexPath.length - 1]; // Index is always the last element in the path
+
+      // If the node is not at the root level, find its parent's id
+      if (indexPath.length > 1) {
+        const parentIndexPath = indexPath.slice(0, -1);
         let cursor = { children: tree };
-        for (const pi of path) {
-          cursor = (cursor.children || [])[pi];
+        for (const i of parentIndexPath) {
+          cursor = (cursor.children || [])[i];
         }
-        containerId = cursor?.id || null;
+        parentId = cursor?.id || null;
       }
-      return { parentId: containerId, index };
-    }
+
+      return { parentId, index };
+    },
   };
 }
 
 function createNode(type) {
   const id = nanoid();
   switch (type) {
-    case 'Form':
-      return { id, type, label: 'Form', props: { title: 'Login Form', submitLabel: 'Login' }, children: [], position: { x: 0, y: 0 } };
-    case 'Card':
-      return { id, type, label: 'Card', props: { title: 'Card', name: 'card-1' }, children: [], position: { x: 0, y: 0 } };
-    case 'Label':
-      return { id, type, label: 'Label', props: { text: 'Label' }, children: [], position: { x: 0, y: 0 } };
-    case 'Logo':
+    case "Form":
+      return {
+        id,
+        type,
+        label: "Form",
+        props: { title: "Login Form", submitLabel: "Login" },
+        children: [],
+        position: { x: 0, y: 0 },
+      };
+    case "Card":
+      return {
+        id,
+        type,
+        label: "Card",
+        props: { title: "Card", name: "card-1" },
+        children: [],
+        position: { x: 0, y: 0 },
+      };
+    case "Label":
+      return {
+        id,
+        type,
+        label: "Label",
+        props: { text: "Label" },
+        children: [],
+        position: { x: 0, y: 0 },
+      };
+    case "Logo":
       return {
         id: nanoid(),
-        type: 'Logo',
+        type: "Logo",
         props: {
-          text: 'LOGO',
-          size: 'medium',
-          displayType: 'text',
-          imageUrl: '',
-          altText: ''
+          text: "LOGO",
+          size: "medium",
+          displayType: "text",
+          imageUrl: "",
+          altText: "",
         },
-        position: { x: 0, y: 0 }
+        position: { x: 0, y: 0 },
       };
-    case 'Input':
-      return { id, type, label: 'Input', props: { name: 'username', placeholder: 'Username' }, children: [], position: { x: 0, y: 0 } };
-    case 'PasswordInput':
-      return { id, type, label: 'Password', props: { name: 'password', placeholder: 'Password', type: 'password' }, children: [], position: { x: 0, y: 0 } };
-    case 'Button':
-      return { id, type, label: 'Button', props: { text: 'Submit', variant: 'primary' }, children: [], position: { x: 0, y: 0 } };
+    case "Input":
+      return {
+        id,
+        type,
+        label: "Input",
+        props: { name: "username", placeholder: "Username" },
+        children: [],
+        position: { x: 0, y: 0 },
+      };
+    case "PasswordInput":
+      return {
+        id,
+        type,
+        label: "Password",
+        props: { name: "password", placeholder: "Password", type: "password" },
+        children: [],
+        position: { x: 0, y: 0 },
+      };
+    case "Button":
+      return {
+        id,
+        type,
+        label: "Button",
+        props: { text: "Submit", variant: "primary" },
+        children: [],
+        position: { x: 0, y: 0 },
+      };
     default:
-      return { id, type: 'Box', label: 'Box', props: {}, children: [], position: { x: 0, y: 0 } };
+      return {
+        id,
+        type: "Box",
+        label: "Box",
+        props: {},
+        children: [],
+        position: { x: 0, y: 0 },
+      };
   }
 }
 
@@ -236,7 +311,7 @@ function computeSuggestions(tree) {
   const suggestions = [];
   for (const [key, items] of groups) {
     if (items.length >= 2) {
-      const [type] = key.split('|');
+      const [type] = key.split("|");
       suggestions.push({ key, type, count: items.length, nodes: items });
     }
   }
@@ -245,14 +320,16 @@ function computeSuggestions(tree) {
 
 function suggestionKey(node) {
   switch (node.type) {
-    case 'Label':
-      return `Label|${(node.props?.text || '').toLowerCase()}`;
-    case 'Input':
-      return `Input|${(node.props?.placeholder || '').toLowerCase()}`;
-    case 'PasswordInput':
-      return `PasswordInput|${(node.props?.placeholder || '').toLowerCase()}`;
-    case 'Button':
-      return `Button|${(node.props?.text || '').toLowerCase()}|${node.props?.variant || 'primary'}`;
+    case "Label":
+      return `Label|${(node.props?.text || "").toLowerCase()}`;
+    case "Input":
+      return `Input|${(node.props?.placeholder || "").toLowerCase()}`;
+    case "PasswordInput":
+      return `PasswordInput|${(node.props?.placeholder || "").toLowerCase()}`;
+    case "Button":
+      return `Button|${(node.props?.text || "").toLowerCase()}|${
+        node.props?.variant || "primary"
+      }`;
     default:
       return `${node.type}|`;
   }
@@ -261,5 +338,3 @@ function suggestionKey(node) {
 export function isContainerType(type) {
   return CONTAINER_TYPES.has(type);
 }
-
-

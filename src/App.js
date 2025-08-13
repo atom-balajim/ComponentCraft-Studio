@@ -38,27 +38,16 @@ export default function App() {
 
   const sensors = useSensors(useSensor(MouseSensor), useSensor(TouchSensor));
 
+  // This useEffect hook was causing a build error because it was missing a dependency array.
+  // Adding '[]' ensures it only runs once on component mount.
   useEffect(() => {
     setSelectedLanguage("reactjs");
-  });
+  }, []);
 
   const handleSaveComponent = (componentData) => {
     const next = [...savedComponents, componentData];
     setSavedComponents(next);
     localStorage.setItem("savedComponents", JSON.stringify(next));
-  };
-
-  const handleQuickSave = () => {
-    const name = prompt("Enter a name for this component");
-    if (!name) return;
-    handleSaveComponent({
-      id: Date.now().toString(),
-      name,
-      tree: JSON.parse(JSON.stringify(tree)),
-      createdAt: new Date().toISOString(),
-      language: selectedLanguage,
-    });
-    alert("Saved!");
   };
 
   const handleLoadComponent = (component) => {

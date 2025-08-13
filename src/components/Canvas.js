@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import cx from "classnames";
 import { useDroppable, useDraggable } from "@dnd-kit/core";
 import {
@@ -11,10 +11,9 @@ export default function Canvas({ tree, selectedId, onSelect }) {
   const rootDrop = useDroppable({ id: "canvas-root" });
   const [canvasHeight, setCanvasHeight] = useState(500);
 
-  console.log("canvasHeight", canvasHeight);
-
-  // Calculate dynamic canvas height based on content
-  const calculateCanvasHeight = () => {
+  // Use useCallback to memoize the function, so it's not recreated on every render.
+  // This allows us to safely add it as a dependency to the useEffect hook.
+  const calculateCanvasHeight = useCallback(() => {
     if (tree.length === 0) return 500; // Default height for empty canvas
 
     let maxY = 0;
@@ -40,11 +39,13 @@ export default function Canvas({ tree, selectedId, onSelect }) {
 
     // Add padding and ensure minimum height
     return Math.max(500, maxY + 100);
-  };
+  }, [tree]); // The function depends on 'tree', so we include it here.
 
+  // Now, we can safely add 'calculateCanvasHeight' to the dependency array.
+  // This effect will run whenever the tree or the memoized function changes.
   useEffect(() => {
     setCanvasHeight(calculateCanvasHeight());
-  }, [tree]);
+  }, [calculateCanvasHeight]);
 
   return (
     <div className="panel canvas-panel">
@@ -186,6 +187,7 @@ function Node({ node, selectedId, onSelect, insideParent }) {
                 child={child}
                 selectedId={selectedId}
                 onSelect={onSelect}
+                insideParent={true}
               />
             ))}
           </SortableContext>
