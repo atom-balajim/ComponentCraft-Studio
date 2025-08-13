@@ -13,6 +13,7 @@ export default function ComponentManager({
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [showGenerateForm, setShowGenerateForm] = useState(false);
 
+  console.log("selectedLanguage", selectedLanguage);
   const handleSaveComponent = () => {
     if (!componentName.trim()) {
       alert("Please enter a component name");
@@ -1040,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     window.addEventListener("download-current", handler);
     return () => window.removeEventListener("download-current", handler);
-  }, [generateCode]);
+  });
 
   return (
     <div className="panel">

@@ -11,6 +11,8 @@ export default function Canvas({ tree, selectedId, onSelect }) {
   const rootDrop = useDroppable({ id: "canvas-root" });
   const [canvasHeight, setCanvasHeight] = useState(500);
 
+  console.log("canvasHeight", canvasHeight);
+
   // Use useCallback to memoize the function, so it's not recreated on every render.
   // This allows us to safely add it as a dependency to the useEffect hook.
   const calculateCanvasHeight = useCallback(() => {

@@ -35,6 +35,7 @@ export default function App() {
 
   const [savedComponents, setSavedComponents] = React.useState([]);
   const [selectedLanguage, setSelectedLanguage] = React.useState("");
+  console.log("selectedLanguage", selectedLanguage);
 
   const sensors = useSensors(useSensor(MouseSensor), useSensor(TouchSensor));
 
